@@ -6,23 +6,24 @@ load("//uv/private:pip.bzl", "pip_compile_test", _pip_compile = "pip_compile")
 
 def pip_compile(
         name,
-        requirements_in = None,
-        requirements_ins = [],
+        src = None,
+        srcs = [],
         requirements_txt = None,
         target_compatible_with = None,
         python_platform = None,
         args = None,
         data = None,
         tags = None,
+        requirements_in = None, # deprecated
         **kwargs):
     """
     Produce targets to compile a requirements.in or pyproject.toml file into a requirements.txt file.
 
     Args:
         name: name of the primary compilation target.
-        requirements_in: (optional, default "//:requirements.in") a label for the requirements.in file.
+        src: (optional, default "//:requirements.in") a label for the requirements.in file.
             May also be provided as a list of strings which represent the requirements file lines.
-        requirements_ins: (optional, default []) a list of labels for additional requirements.in files.
+        srcs: (optional, default []) a list of labels for requirements.in files.
             These files will be concatenated together in the order they are provided.
         requirements_txt: (optional, default "//:requirements.txt") a label for the requirements.txt file.
         python_platform: (optional) a uv pip compile compatible value for --python-platform.
@@ -42,20 +43,26 @@ def pip_compile(
       [name]_test: a testable target that will check that requirements_txt is up to date with requirements_in
     """
 
-    if requirements_ins:
-        if requirements_in:
-            fail("Cannot provide both requirements_in and requirements_ins")
+    if requirements_in:
+        print("WARNING: requirements_in is deprecated, please use src or srcs instead")
+        if src:
+            fail("Cannot provide both requirements_in and src")
+        src = requirements_in
+
+    if srcs:
+        if src:
+            fail("Cannot provide both src and srcs")
         write_target = "_{}.write".format(name)
         native.genrule(
             name = write_target,
-            srcs = requirements_ins,
+            srcs = srcs,
             outs = ["_{}.in".format(name)],
             # use `awk 1` instead of `cat` ensures trailing newlines for each file
-            cmd = "awk 1 {} > $(OUTS)".format(" ".join(["$(location {})".format(r) for r in requirements_ins])),
+            cmd = "awk 1 {} > $(OUTS)".format(" ".join(["$(location {})".format(r) for r in srcs])),
         )
-        requirements_in = write_target
+        src = write_target
 
-    requirements_in = requirements_in or "//:requirements.in"
+    requirements_in = src or "//:requirements.in"
     requirements_txt = requirements_txt or "//:requirements.txt"
     tags = tags or []
     if types.is_list(requirements_in):
